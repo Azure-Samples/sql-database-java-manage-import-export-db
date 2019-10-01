@@ -8,7 +8,7 @@ description: "Getting Started with Sql - Manage Sql Import Export Database - in 
 urlFragment: sql-database-java-manage-import-export-db
 ---
 
-# Getting Started with Sql - Manage Sql Import Export Database - in Java #
+# Getting Started with Sql - Manage Sql Import Export Database - in Java
 
 
   Azure SQL sample for managing import/export SQL Database -
@@ -25,11 +25,13 @@ To run this sample:
 
 Set the environment variable `AZURE_AUTH_LOCATION` with the full path for an auth file. See [how to create an auth file](https://github.com/Azure/azure-libraries-for-java/blob/master/AUTH.md).
 
-    git clone https://github.com/Azure-Samples/sql-database-java-manage-import-export-db.git
+```bash
+git clone https://github.com/Azure-Samples/sql-database-java-manage-import-export-db.git
 
-    cd sql-database-java-manage-import-export-db
+cd sql-database-java-manage-import-export-db
 
-    mvn clean compile exec:java
+mvn clean compile exec:java
+```
 
 ## More information ##
 
