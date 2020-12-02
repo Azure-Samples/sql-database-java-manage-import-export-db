@@ -1,30 +1,22 @@
-/**
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for
- * license information.
- */
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 
-package com.microsoft.azure.management.sql.samples;
+package com.azure.resourcemanager.sql.samples;
 
-import com.microsoft.azure.AzureEnvironment;
-import com.microsoft.azure.AzureResponseBuilder;
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.Azure;
-import com.microsoft.azure.management.resources.fluentcore.arm.Region;
-import com.microsoft.azure.management.resources.fluentcore.model.Creatable;
-import com.microsoft.azure.management.resources.fluentcore.utils.SdkContext;
-import com.microsoft.azure.management.samples.Utils;
-import com.microsoft.azure.management.sql.SampleName;
-import com.microsoft.azure.management.sql.SqlDatabase;
-import com.microsoft.azure.management.sql.SqlDatabaseImportExportResponse;
-import com.microsoft.azure.management.sql.SqlServer;
-import com.microsoft.azure.management.storage.StorageAccount;
-import com.microsoft.azure.serializer.AzureJacksonAdapter;
-import com.microsoft.rest.LogLevel;
-import com.microsoft.rest.RestClient;
 
-import java.io.File;
-import java.util.concurrent.TimeUnit;
+import com.azure.core.credential.TokenCredential;
+import com.azure.core.http.policy.HttpLogDetailLevel;
+import com.azure.core.management.AzureEnvironment;
+import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.azure.resourcemanager.AzureResourceManager;
+import com.azure.core.management.Region;
+import com.azure.resourcemanager.resources.fluentcore.model.Creatable;
+import com.azure.core.management.profile.AzureProfile;
+import com.azure.resourcemanager.samples.Utils;
+import com.azure.resourcemanager.sql.models.SampleName;
+import com.azure.resourcemanager.sql.models.SqlDatabase;
+import com.azure.resourcemanager.sql.models.SqlServer;
+import com.azure.resourcemanager.storage.models.StorageAccount;
 
 /**
  * Azure SQL sample for managing import/export SQL Database -
@@ -37,23 +29,22 @@ import java.util.concurrent.TimeUnit;
 public final class ManageSqlImportExportDatabase {
     /**
      * Main function which runs the actual sample.
-     * @param azure instance of the azure client
+     * @param azureResourceManager instance of the azure client
      * @return true if sample runs successfully
      */
-    public static boolean runSample(Azure azure) {
-        final String sqlServerName = Utils.createRandomName("sqlserver");
-        final String rgName = Utils.createRandomName("rgsql");
-        String storageName = SdkContext.randomResourceName(sqlServerName, 23);
+    public static boolean runSample(AzureResourceManager azureResourceManager) {
+        final String sqlServerName = Utils.randomResourceName(azureResourceManager, "sqlserver", 20);
+        final String rgName = Utils.randomResourceName(azureResourceManager, "rgsql", 20);
+        String storageName = Utils.randomResourceName(azureResourceManager, sqlServerName, 23);
         final String administratorLogin = "sqladmin3423";
-        // [SuppressMessage("Microsoft.Security", "CS002:SecretInNextLine", Justification="Serves as an example, not for deployment. Please change when using this in your code.")]
-        final String administratorPassword = "myS3cureP@ssword";
+        final String administratorPassword = Utils.password();
         final String dbFromSampleName = "db-from-sample";
         try {
 
             // ============================================================
             // Create a SQL Server with one database from a sample.
-            SqlServer sqlServer = azure.sqlServers().define(sqlServerName)
-                .withRegion(Region.US_WEST)
+            SqlServer sqlServer = azureResourceManager.sqlServers().define(sqlServerName)
+                .withRegion(Region.US_EAST)
                 .withNewResourceGroup(rgName)
                 .withAdministratorLogin(administratorLogin)
                 .withAdministratorPassword(administratorPassword)
@@ -72,23 +63,15 @@ public final class ManageSqlImportExportDatabase {
             // Export a database from a SQL server created above to a new storage account within the same resource group.
             System.out.println("Exporting a database from a SQL server created above to a new storage account within the same resource group.");
 
-            SqlDatabaseImportExportResponse exportedDB;
-            StorageAccount storageAccount = azure.storageAccounts().getByResourceGroup(sqlServer.resourceGroupName(), storageName);
-            if (storageAccount == null) {
-                Creatable<StorageAccount> storageAccountCreatable = azure.storageAccounts()
-                    .define(storageName)
-                    .withRegion(sqlServer.regionName())
-                    .withExistingResourceGroup(sqlServer.resourceGroupName());
+            Creatable<StorageAccount> storageAccountCreatable = azureResourceManager.storageAccounts()
+                .define(storageName)
+                .withRegion(sqlServer.regionName())
+                .withExistingResourceGroup(sqlServer.resourceGroupName());
 
-                exportedDB = dbFromSample.exportTo(storageAccountCreatable, "container-name", "dbfromsample.bacpac")
-                    .withSqlAdministratorLoginAndPassword(administratorLogin, administratorPassword)
-                    .execute();
-                storageAccount = azure.storageAccounts().getByResourceGroup(sqlServer.resourceGroupName(), storageName);
-            } else {
-                exportedDB = dbFromSample.exportTo(storageAccount, "container-name", "dbfromsample.bacpac")
-                    .withSqlAdministratorLoginAndPassword(administratorLogin, administratorPassword)
-                    .execute();
-            }
+            dbFromSample.exportTo(storageAccountCreatable, "container-name", "dbfromsample.bacpac")
+                .withSqlAdministratorLoginAndPassword(administratorLogin, administratorPassword)
+                .execute();
+            StorageAccount storageAccount = azureResourceManager.storageAccounts().getByResourceGroup(sqlServer.resourceGroupName(), storageName);
 
             // ============================================================
             // Import a database within a new elastic pool from a storage account container created above.
@@ -127,7 +110,7 @@ public final class ManageSqlImportExportDatabase {
 
             // Delete the storage account.
             System.out.println("Deleting the storage account");
-            azure.storageAccounts().deleteById(storageAccount.id());
+            azureResourceManager.storageAccounts().deleteById(storageAccount.id());
 
             // Delete the databases.
             System.out.println("Deleting the databases");
@@ -140,22 +123,17 @@ public final class ManageSqlImportExportDatabase {
 
             // Delete the SQL Server.
             System.out.println("Deleting a Sql Server");
-            azure.sqlServers().deleteById(sqlServer.id());
+            azureResourceManager.sqlServers().deleteById(sqlServer.id());
             return true;
-        } catch (Exception f) {
-            System.out.println(f.getMessage());
-            f.printStackTrace();
         } finally {
             try {
                 System.out.println("Deleting Resource Group: " + rgName);
-                azure.resourceGroups().deleteByName(rgName);
+                azureResourceManager.resourceGroups().beginDeleteByName(rgName);
                 System.out.println("Deleted Resource Group: " + rgName);
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 System.out.println("Did not create any resources in Azure. No clean up is necessary");
             }
         }
-        return false;
     }
 
 
@@ -166,22 +144,21 @@ public final class ManageSqlImportExportDatabase {
     public static void main(String[] args) {
         try {
 
-            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
+            final AzureProfile profile = new AzureProfile(AzureEnvironment.AZURE);
+            final TokenCredential credential = new DefaultAzureCredentialBuilder()
+                .authorityHost(profile.getEnvironment().getActiveDirectoryEndpoint())
+                .build();
 
-            ApplicationTokenCredentials credentials = ApplicationTokenCredentials.fromFile(credFile);
-            RestClient restClient = new RestClient.Builder()
-                .withBaseUrl(AzureEnvironment.AZURE, AzureEnvironment.Endpoint.RESOURCE_MANAGER)
-                .withSerializerAdapter(new AzureJacksonAdapter())
-                .withReadTimeout(150, TimeUnit.SECONDS)
-                .withLogLevel(LogLevel.BODY)
-                .withResponseBuilderFactory(new AzureResponseBuilder.Factory())
-                .withCredentials(credentials).build();
-            Azure azure = Azure.authenticate(restClient, credentials.domain(), credentials.defaultSubscriptionId()).withDefaultSubscription();
+            AzureResourceManager azureResourceManager = AzureResourceManager
+                .configure()
+                .withLogLevel(HttpLogDetailLevel.BASIC)
+                .authenticate(credential, profile)
+                .withDefaultSubscription();
 
             // Print selected subscription
-            System.out.println("Selected subscription: " + azure.subscriptionId());
+            System.out.println("Selected subscription: " + azureResourceManager.subscriptionId());
 
-            runSample(azure);
+            runSample(azureResourceManager);
         } catch (Exception e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
